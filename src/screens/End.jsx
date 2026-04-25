@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { subscribeToRoom, resetGame } from '../services/db';
 import Avatar from '../components/Avatar';
-import { motion } from 'framer-motion';
+import Camera from '../components/Camera';
+import { motion, AnimatePresence } from 'framer-motion';
 
 function End() {
   const { roomCode } = useParams();
@@ -56,9 +57,77 @@ function End() {
         <h1 style={{ fontSize: '4rem', marginBottom: '1rem' }}>🏆 Winner! 🏆</h1>
         
         {winner && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '2rem' }}>
-            <Avatar face={winner.avatar.face} hair={winner.avatar.hair} color={winner.avatar.color} size={150} />
-            <h2 style={{ marginTop: '1rem', color: 'var(--primary)', fontSize: '2.5rem' }}>{winner.name}</h2>
+          <div style={{ position: 'relative', height: '450px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '2rem' }}>
+            
+            {/* Polaroid Gallery around the winner */}
+            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+              {(winner.photos || []).map((photo, idx) => {
+                const angle = (idx / (winner.photos.length || 1)) * Math.PI * 2;
+                const radius = 180;
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                const rotation = (idx * 15) % 30 - 15;
+
+                return (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, scale: 0, x: 0, y: 0 }}
+                    animate={{ opacity: 1, scale: 1, x, y, rotate: rotation }}
+                    transition={{ delay: 0.5 + idx * 0.1, type: 'spring' }}
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      width: '100px',
+                      padding: '8px 8px 24px 8px',
+                      background: 'white',
+                      boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
+                      transformOrigin: 'center'
+                    }}
+                  >
+                    <img src={photo} alt={`victory-${idx}`} style={{ width: '100%', height: '80px', objectFit: 'cover' }} />
+                  </motion.div>
+                );
+              })}
+            </div>
+
+            {/* Central Winner Feed/Avatar */}
+            <motion.div 
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.3, type: 'spring' }}
+              style={{ 
+                zIndex: 10,
+                width: '220px',
+                height: '220px',
+                borderRadius: '50%',
+                overflow: 'hidden',
+                border: '8px solid var(--primary)',
+                boxShadow: '0 0 30px rgba(255, 209, 102, 0.5)',
+                background: '#eee'
+              }}
+            >
+              {playerName === winner.name ? (
+                <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                  <Camera disabled={true} />
+                  <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, textAlign: 'center', color: 'white', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.5)', fontSize: '0.8rem' }}>
+                    LIVE VICTORY FEED
+                  </div>
+                </div>
+              ) : (
+                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                   {winner.photos && winner.photos.length > 0 ? (
+                     <img src={winner.photos[winner.photos.length - 1]} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                   ) : (
+                     <Avatar face={winner.avatar.face} hair={winner.avatar.hair} color={winner.avatar.color} size={220} />
+                   )}
+                </div>
+              )}
+            </motion.div>
+
+            <div style={{ position: 'absolute', bottom: 20, zIndex: 11, background: 'var(--dark)', color: 'white', padding: '4px 16px', borderRadius: '20px', fontWeight: 'bold' }}>
+              {winner.name} • {winner.score} pts
+            </div>
           </div>
         )}
 
@@ -78,8 +147,7 @@ function End() {
                 <span style={{ fontWeight: 'bold' }}>{p.name}</span>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontWeight: 'bold', color: 'var(--secondary)' }}>{p.score} Items</div>
-                <div style={{ fontSize: '0.8rem', color: '#666' }}>{p.failedAttempts} Retries</div>
+                <div style={{ fontWeight: 'bold', color: 'var(--secondary)' }}>{p.score} Total Points</div>
               </div>
             </div>
           ))}

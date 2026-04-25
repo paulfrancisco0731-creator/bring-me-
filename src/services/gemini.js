@@ -46,15 +46,15 @@ export const verifyPhoto = async (itemDescription, base64Image) => {
   const prompt = `You are the judge for a "Bring Me" game. 
 The current item is: "${itemDescription}".
 
-Check the provided photo against these 3 rules:
-1. Does the photo match the item description?
-2. Does it appear to be a live, real-world photo (not a screenshot, drawing, or downloaded image)?
-3. Is the required participation proof/staging instruction visible in the frame?
+Evaluate the provided photo and award points from 0 to 100 based on these criteria:
+1. Accuracy: Does the photo match the item description perfectly? (e.g. if it asks for a spoon on the nose, and it's just on the face, give partial points like 50).
+2. Authenticity: Does it appear to be a live, real-world photo (not a screenshot or downloaded image)? (Give 0 points if it's fake).
+3. Effort/Proof: Is the required participation proof/staging instruction clearly visible?
 
 Respond strictly in JSON format:
 {
-  "pass": true/false,
-  "reason": "A short 1-sentence reason explaining why it passed or failed. Be funny and use Taglish if the item is Filipino-themed."
+  "points": number,
+  "reason": "A short 1-sentence reason explaining the score. Be funny and use Taglish if the item is Filipino-themed."
 }`;
 
   try {
@@ -82,13 +82,14 @@ Respond strictly in JSON format:
 
 export const generateRecap = async (gameData, theme) => {
   const prompt = `You are a funny commentator for a "Bring Me" game.
-The game just ended. Here is the game data:
+The game just ended. Here is the game data (players, their scores/points, and items completed):
 ${JSON.stringify(gameData, null, 2)}
 
 Write a personalized, funny post-game recap in the style of the chosen theme: ${theme}.
-If Filipino Humor: Use Taglish, with kulit commentary per player (e.g., roast them for retakes, praise them for speed).
+The game is points-based (highest score wins).
+If Filipino Humor: Use Taglish, with kulit commentary per player (e.g., roast them for low points or praise their perfect 100 scores).
 If Random: Witty English recap with playful roasting.
-If it's a Solo game, focus on the player's personal performance, time, and failed attempts.
+If it's a Solo game, focus on the player's personal performance and points achieved.
 
 Keep it under 150 words.`;
 

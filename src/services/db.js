@@ -20,6 +20,7 @@ export const createRoom = async (hostName, hostAvatar) => {
         currentItemIndex: 0,
         status: 'waiting', // waiting, taking_photo, submitted, verified, failed
         lastSubmittedPhoto: null,
+        photos: [], // Store all captured photos for the gallery
         failedAttempts: 0,
         totalTime: 0
       }
@@ -58,6 +59,7 @@ export const joinRoom = async (roomCode, playerName, playerAvatar) => {
       currentItemIndex: 0,
       status: 'waiting',
       lastSubmittedPhoto: null,
+      photos: [],
       failedAttempts: 0,
       totalTime: 0
     }
@@ -85,6 +87,7 @@ export const startGame = async (roomCode, items) => {
     updates[`rooms/${roomCode}/players/${p}/status`] = 'taking_photo';
     updates[`rooms/${roomCode}/players/${p}/currentItemIndex`] = 0;
     updates[`rooms/${roomCode}/players/${p}/lastSubmittedPhoto`] = null;
+    updates[`rooms/${roomCode}/players/${p}/photos`] = [];
     updates[`rooms/${roomCode}/players/${p}/score`] = 0;
     updates[`rooms/${roomCode}/players/${p}/failedAttempts`] = 0;
     updates[`rooms/${roomCode}/players/${p}/totalTime`] = 0;
@@ -93,29 +96,30 @@ export const startGame = async (roomCode, items) => {
 };
 
 export const submitPhoto = async (roomCode, playerName, photo) => {
-  await update(ref(database, `rooms/${roomCode}/players/${playerName}`), {
+  const pRef = ref(database, `rooms/${roomCode}/players/${playerName}`);
+  const snap = await get(pRef);
+  const currentPhotos = snap.val().photos || [];
+  
+  await update(pRef, {
     status: 'submitted',
-    lastSubmittedPhoto: photo
+    lastSubmittedPhoto: photo,
+    photos: [...currentPhotos, photo]
   });
 };
 
-export const updateVerificationResult = async (roomCode, playerName, pass, itemIndex) => {
-  if (pass) {
-    await update(ref(database, `rooms/${roomCode}/players/${playerName}`), {
-      status: 'verified',
-      score: itemIndex + 1,
-      currentItemIndex: itemIndex + 1,
-      lastSubmittedPhoto: null // clear to show success checkmark then next item
-    });
-  } else {
-    const pRef = ref(database, `rooms/${roomCode}/players/${playerName}`);
-    const snap = await get(pRef);
-    const fails = (snap.val().failedAttempts || 0) + 1;
-    await update(pRef, {
-      status: 'failed',
-      failedAttempts: fails
-    });
-  }
+export const updateVerificationResult = async (roomCode, playerName, points, itemIndex) => {
+  const pRef = ref(database, `rooms/${roomCode}/players/${playerName}`);
+  const snap = await get(pRef);
+  const currentData = snap.val();
+  
+  const newScore = (currentData.score || 0) + points;
+  
+  await update(pRef, {
+    status: points > 0 ? 'verified' : 'failed',
+    score: newScore,
+    currentItemIndex: itemIndex + 1,
+    // We'll keep the photo briefly for the UI to show it with the score overlay
+  });
 };
 
 export const setPlayerStatus = async (roomCode, playerName, status) => {

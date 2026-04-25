@@ -65,10 +65,16 @@ function Game() {
       if (itemsCount === 0) return;
 
       for (const [name, p] of Object.entries(room.players)) {
-        if (p.score >= itemsCount && room.status !== 'ended') {
-          // Winner found! Trigger recap generation
-          const recap = await generateRecap(room.players, room.theme);
-          await endGame(roomCode, name, recap);
+        if (p.currentItemIndex >= itemsCount && room.status !== 'ended') {
+          // A player has finished all items. Declare winner based on points!
+          const allPlayers = Object.values(room.players);
+          const winnerByPoints = allPlayers.reduce((prev, current) => (prev.score > current.score) ? prev : current);
+          
+          const endAction = async () => {
+            const recap = await generateRecap(room.players, room.theme);
+            await endGame(roomCode, winnerByPoints.name, recap);
+          };
+          endAction();
         }
       }
     };
@@ -94,17 +100,15 @@ function Game() {
     const result = await verifyPhoto(currentItem.description, base64Image);
     setVerificationFeedback(result);
     
-    // Update DB
-    await updateVerificationResult(roomCode, playerName, result.pass, me.currentItemIndex);
+    // Update DB (this will also increment currentItemIndex)
+    await updateVerificationResult(roomCode, playerName, result.points, me.currentItemIndex);
     
     setVerifying(false);
     
-    // Reset timer on pass
-    if (result.pass) {
-      setTimeLeft(room.timerDuration || 60);
-      // Wait a sec to show success before resetting feedback
-      setTimeout(() => setVerificationFeedback(null), 3000);
-    }
+    // Reset timer and show points feedback
+    setTimeLeft(room.timerDuration || 60);
+    // Wait a sec to show result before resetting feedback
+    setTimeout(() => setVerificationFeedback(null), 3500);
   };
 
   const renderBubble = (p) => {
@@ -214,14 +218,17 @@ function Game() {
                 style={{
                   padding: '1rem',
                   borderRadius: '12px',
-                  background: verificationFeedback.pass ? 'var(--tertiary)' : 'var(--secondary)',
-                  color: 'white',
+                  background: verificationFeedback.points > 70 ? 'var(--tertiary)' : (verificationFeedback.points > 30 ? 'var(--primary)' : 'var(--secondary)'),
+                  color: verificationFeedback.points > 30 && verificationFeedback.points <= 70 ? 'var(--dark)' : 'white',
                   fontWeight: 'bold',
-                  textAlign: 'center'
+                  textAlign: 'center',
+                  boxShadow: 'var(--shadow-md)'
                 }}
               >
-                {verificationFeedback.pass ? '✅ ' : '❌ '}
-                {verificationFeedback.reason}
+                <div style={{ fontSize: '1.5rem', marginBottom: '0.2rem' }}>
+                  {verificationFeedback.points > 0 ? `+${verificationFeedback.points} Points!` : '0 Points'}
+                </div>
+                <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>{verificationFeedback.reason}</div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -235,7 +242,7 @@ function Game() {
               {renderBubble(p)}
               <Avatar face={p.avatar.face} hair={p.avatar.hair} color={p.avatar.color} size={80} />
               <span style={{ marginTop: '0.5rem', fontWeight: 'bold', background: p.name === playerName ? 'var(--primary)' : 'transparent', color: p.name === playerName ? 'var(--dark)' : 'inherit', padding: '2px 8px', borderRadius: '12px' }}>
-                {p.name} {p.score}/{items.length}
+                {p.name} • {p.score} pts
               </span>
             </div>
           ))}
