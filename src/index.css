@@ -69,6 +69,14 @@ h1 {
   position: relative;
 }
 
+@media (max-width: 600px) {
+  .app-container {
+    padding: 1rem;
+    justify-content: flex-start;
+    padding-top: 2rem;
+  }
+}
+
 .glass-panel {
   background: var(--surface);
   backdrop-filter: blur(10px);
@@ -79,6 +87,12 @@ h1 {
   max-width: 500px;
   color: var(--dark);
   text-align: center;
+}
+
+@media (max-width: 600px) {
+  .glass-panel {
+    padding: 1.5rem;
+  }
 }
 
 /* Forms & Inputs */

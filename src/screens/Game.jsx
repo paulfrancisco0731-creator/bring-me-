@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { subscribeToRoom, submitPhoto, updateVerificationResult, setPlayerStatus, endGame } from '../services/db';
+import { subscribeToRoom, submitPhoto, updateVerificationResult, advanceToNextRound, endGame } from '../services/db';
 import { verifyPhoto, generateRecap } from '../services/ai';
 import Avatar from '../components/Avatar';
 import Camera from '../components/Camera';
@@ -14,10 +14,8 @@ function Game() {
   const { playerName, isHost } = location.state || {};
   const [room, setRoom] = useState(null);
   const [verifying, setVerifying] = useState(false);
-  const [verificationFeedback, setVerificationFeedback] = useState(null); // { pass, reason }
-  
-  // Timer state
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [verificationFeedback, setVerificationFeedback] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(0);
 
   useEffect(() => {
     if (!playerName) {
@@ -37,78 +35,71 @@ function Game() {
     return () => unsubscribe();
   }, [roomCode, playerName, isHost, navigate]);
 
-  // Handle timer
+  // Sync Global Timer
   useEffect(() => {
-    if (!room || room.status !== 'playing') return;
+    if (!room || room.status !== 'playing' || !room.roundEndsAt) return;
     
-    // Simplistic timer that runs on the client. 
-    // In a production app, sync with server time.
     const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          // Timer out logic - for simplicity, just skip to next item or auto-fail
-          return room.timerDuration || 60;
+      const now = Date.now();
+      const remaining = Math.max(0, Math.floor((room.roundEndsAt - now) / 1000));
+      setTimeLeft(remaining);
+
+      // HOST ONLY: Watchdog to move rounds
+      if (isHost && remaining === 0) {
+        const nextIndex = room.roomCurrentItemIndex + 1;
+        const totalItems = room.items?.length || 0;
+
+        if (nextIndex < totalItems) {
+          // Automatic 0 points for those who didn't submit
+          // We'll give it a 3s buffer to show "Time's up" before moving
+          setTimeout(() => {
+            advanceToNextRound(roomCode, nextIndex, room.timerDuration || 60);
+          }, 3000);
+          clearInterval(interval);
+        } else {
+          // Game finished!
+          handleGameEnd();
+          clearInterval(interval);
         }
-        return prev - 1;
-      });
+      }
     }, 1000);
     
     return () => clearInterval(interval);
-  }, [room]);
+  }, [room?.roundEndsAt, isHost, roomCode]);
 
-  // Check for winner
-  useEffect(() => {
-    if (!room || !room.players || !isHost) return;
-    
-    const checkWinner = async () => {
-      const itemsCount = room.items?.length || 0;
-      if (itemsCount === 0) return;
-
-      for (const [name, p] of Object.entries(room.players)) {
-        if (p.currentItemIndex >= itemsCount && room.status !== 'ended') {
-          // A player has finished all items. Declare winner based on points!
-          const allPlayers = Object.values(room.players);
-          const winnerByPoints = allPlayers.reduce((prev, current) => (prev.score > current.score) ? prev : current);
-          
-          const endAction = async () => {
-            const recap = await generateRecap(room.players, room.theme);
-            await endGame(roomCode, winnerByPoints.name, recap);
-          };
-          endAction();
-        }
-      }
-    };
-    checkWinner();
-  }, [room, isHost, roomCode]);
+  const handleGameEnd = async () => {
+    if (!isHost || !room) return;
+    const allPlayers = Object.values(room.players);
+    const winnerByPoints = allPlayers.reduce((prev, current) => (prev.score > current.score) ? prev : current);
+    const recap = await generateRecap(room.players, room.theme);
+    await endGame(roomCode, winnerByPoints.name, recap);
+  };
 
   if (!room || !room.players) return <div className="app-container">Loading game state...</div>;
 
   const me = room.players[playerName];
   const items = room.items || [];
-  const currentItem = items[me.currentItemIndex];
+  const currentItemIndex = room.roomCurrentItemIndex || 0;
+  const currentItem = items[currentItemIndex];
 
   const handleCapture = async (base64Image) => {
-    if (verifying || !currentItem) return;
+    if (verifying || !currentItem || me.status === 'submitted' || timeLeft === 0) return;
     
     setVerifying(true);
     setVerificationFeedback(null);
     
-    // Optimistic UI update
+    // Optimistic UI: Player is submitting
     await submitPhoto(roomCode, playerName, base64Image);
     
-    // Send to Gemini
+    // AI Verification
     const result = await verifyPhoto(currentItem.description, base64Image);
     setVerificationFeedback(result);
     
-    // Update DB (this will also increment currentItemIndex)
-    await updateVerificationResult(roomCode, playerName, result.points, me.currentItemIndex);
-    
+    // Update DB with results
+    await updateVerificationResult(roomCode, playerName, result.points, currentItemIndex);
     setVerifying(false);
-    
-    // Reset timer and show points feedback
-    setTimeLeft(room.timerDuration || 60);
-    // Wait a sec to show result before resetting feedback
-    setTimeout(() => setVerificationFeedback(null), 3500);
+
+    // Feedback persists until next round
   };
 
   const renderBubble = (p) => {
@@ -123,26 +114,10 @@ function Game() {
       content = <div style={{ background: '#333', width: '100%', height: '100%', filter: 'blur(5px)' }} />;
     }
 
-    if (p.status === 'verified') {
+    if (p.status === 'verified' || (p.status === 'submitted' && !verifying)) {
       borderColor = 'var(--tertiary)';
-      content = (
-        <>
-          {content}
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(6, 214, 160, 0.5)' }}>
-            <span style={{ fontSize: '2rem' }}>✅</span>
-          </div>
-        </>
-      );
     } else if (p.status === 'failed') {
       borderColor = 'var(--secondary)';
-      content = (
-        <>
-          {content}
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(239, 71, 111, 0.5)' }}>
-            <span style={{ fontSize: '2rem' }}>❌</span>
-          </div>
-        </>
-      );
     }
 
     return (
@@ -160,7 +135,6 @@ function Game() {
         boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
       }}>
         {content}
-        {/* Tail for bubble */}
         <div style={{
           position: 'absolute',
           bottom: -6,
@@ -177,77 +151,107 @@ function Game() {
   };
 
   return (
-    <div className="app-container" style={{ padding: '1rem', height: '100vh', justifyContent: 'flex-start' }}>
+    <div className="app-container game-screen" style={{ padding: '1rem', justifyContent: 'flex-start' }}>
       
-      {/* Top Bar: Timer & Progress */}
-      <div style={{ width: '100%', maxWidth: '1000px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <div className="glass-panel" style={{ padding: '0.5rem 1rem', width: 'auto', borderRadius: '1rem' }}>
-          <h3 style={{ margin: 0, color: 'var(--secondary)' }}>⏱️ {timeLeft}s</h3>
+      {/* HUD: Timer & Round */}
+      <div className="hud-bar" style={{ width: '100%', maxWidth: '1000px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <div className="glass-panel hud-item" style={{ padding: '0.5rem 1.5rem', width: 'auto', borderRadius: '1rem' }}>
+          <h3 style={{ margin: 0, color: timeLeft < 10 ? 'var(--secondary)' : 'var(--accent)' }}>
+            {timeLeft > 0 ? `⏱️ ${timeLeft}s` : '⌛ Time\'s Up!'}
+          </h3>
         </div>
-        <div className="glass-panel" style={{ padding: '0.5rem 1rem', width: 'auto', borderRadius: '1rem' }}>
-          <h3 style={{ margin: 0 }}>Item {Math.min(me.currentItemIndex + 1, items.length)} / {items.length}</h3>
+        <div className="glass-panel hud-item" style={{ padding: '0.5rem 1.5rem', width: 'auto', borderRadius: '1rem' }}>
+          <h3 style={{ margin: 0 }}>Round {currentItemIndex + 1} / {items.length}</h3>
         </div>
       </div>
 
-      {/* Current Item Card */}
-      {currentItem && (
-        <motion.div 
-          className="glass-panel" 
-          style={{ width: '100%', maxWidth: '800px', marginBottom: '2rem' }}
-          key={currentItem.id}
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-        >
-          <h2 style={{ color: 'var(--accent)', marginBottom: '0.5rem' }}>Bring Me...</h2>
-          <p style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{currentItem.description}</p>
-        </motion.div>
-      )}
-
-      <div style={{ display: 'flex', gap: '2rem', width: '100%', maxWidth: '1000px', height: '100%', flexWrap: 'wrap' }}>
+      {/* Main Layout */}
+      <div className="game-main-layout" style={{ display: 'flex', gap: '2rem', width: '100%', maxWidth: '1200px', flexDirection: 'column', alignItems: 'center' }}>
         
-        {/* Left: Camera & Feedback */}
-        <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <Camera onCapture={handleCapture} disabled={verifying || !currentItem} />
-          
-          <AnimatePresence>
-            {verificationFeedback && (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                style={{
-                  padding: '1rem',
-                  borderRadius: '12px',
-                  background: verificationFeedback.points > 70 ? 'var(--tertiary)' : (verificationFeedback.points > 30 ? 'var(--primary)' : 'var(--secondary)'),
-                  color: verificationFeedback.points > 30 && verificationFeedback.points <= 70 ? 'var(--dark)' : 'white',
-                  fontWeight: 'bold',
-                  textAlign: 'center',
-                  boxShadow: 'var(--shadow-md)'
-                }}
-              >
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.2rem' }}>
-                  {verificationFeedback.points > 0 ? `+${verificationFeedback.points} Points!` : '0 Points'}
-                </div>
-                <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>{verificationFeedback.reason}</div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          {verifying && <p style={{ textAlign: 'center', fontWeight: 'bold', color: 'var(--primary)' }}>AI is verifying your photo...</p>}
-        </div>
+        {/* Current Item Card */}
+        {currentItem && (
+          <motion.div 
+            className="glass-panel item-card" 
+            style={{ width: '100%', maxWidth: '600px', padding: '1.5rem' }}
+            key={currentItemIndex}
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+          >
+            <h2 style={{ color: 'var(--secondary)', fontSize: '1.2rem', marginBottom: '0.5rem' }}>BRING ME...</h2>
+            <p style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--dark)' }}>{currentItem.description}</p>
+          </motion.div>
+        )}
 
-        {/* Right: Room / Avatars */}
-        <div className="glass-panel" style={{ flex: '2 1 400px', display: 'flex', flexWrap: 'wrap', gap: '2rem', justifyContent: 'center', alignContent: 'flex-start', paddingTop: '4rem' }}>
-          {Object.values(room.players).map(p => (
-            <div key={p.name} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              {renderBubble(p)}
-              <Avatar face={p.avatar.face} hair={p.avatar.hair} color={p.avatar.color} size={80} />
-              <span style={{ marginTop: '0.5rem', fontWeight: 'bold', background: p.name === playerName ? 'var(--primary)' : 'transparent', color: p.name === playerName ? 'var(--dark)' : 'inherit', padding: '2px 8px', borderRadius: '12px' }}>
-                {p.name} • {p.score} pts
-              </span>
-            </div>
-          ))}
+        <div className="game-grid" style={{ display: 'flex', gap: '2rem', width: '100%', justifyContent: 'center', flexWrap: 'wrap' }}>
+          
+          {/* Left: Camera Section */}
+          <div className="camera-section" style={{ flex: '1 1 320px', maxWidth: '500px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <Camera onCapture={handleCapture} disabled={verifying || me.status === 'submitted' || timeLeft === 0} />
+            
+            {me.status === 'submitted' && !verifying && verificationFeedback && (
+               <motion.div 
+               initial={{ scale: 0.8, opacity: 0 }}
+               animate={{ scale: 1, opacity: 1 }}
+               style={{
+                 padding: '1rem',
+                 borderRadius: '16px',
+                 background: 'white',
+                 border: '3px solid var(--tertiary)',
+                 textAlign: 'center',
+                 boxShadow: 'var(--shadow-md)'
+               }}
+             >
+               <h2 style={{ color: 'var(--tertiary)', fontSize: '2rem', margin: 0 }}>+{verificationFeedback.points} pts!</h2>
+               <p style={{ color: 'var(--dark)', margin: '0.5rem 0 0' }}>{verificationFeedback.reason}</p>
+             </motion.div>
+            )}
+
+            {verifying && (
+              <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(255,255,255,0.8)' }}>
+                <p className="floating" style={{ margin: 0, fontWeight: 'bold', color: 'var(--accent)' }}>🔍 AI is judging your photo...</p>
+              </div>
+            )}
+
+            {timeLeft === 0 && me.status !== 'submitted' && (
+              <div className="glass-panel" style={{ padding: '1rem', background: 'var(--secondary)', color: 'white' }}>
+                <p style={{ margin: 0, fontWeight: 'bold' }}>⌛ Too slow! You get 0 points this round.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Right: Leaderboard */}
+          <div className="glass-panel leaderboard-section" style={{ flex: '1 1 300px', maxWidth: '500px', display: 'flex', flexWrap: 'wrap', gap: '1.5rem', justifyContent: 'center', alignContent: 'flex-start', paddingTop: '4rem' }}>
+            {Object.values(room.players).map(p => (
+              <div key={p.name} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                {renderBubble(p)}
+                <Avatar face={p.avatar.face} hair={p.avatar.hair} color={p.avatar.color} size={60} />
+                <span style={{ 
+                  marginTop: '0.5rem', 
+                  fontWeight: 'bold', 
+                  fontSize: '0.9rem',
+                  background: p.name === playerName ? 'var(--primary)' : 'rgba(255,255,255,0.5)', 
+                  color: 'var(--dark)', 
+                  padding: '2px 10px', 
+                  borderRadius: '12px',
+                  boxShadow: 'var(--shadow-sm)'
+                }}>
+                  {p.name}: {p.score}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .game-grid { flex-direction: column; align-items: center; }
+          .hud-bar { padding: 0 0.5rem; }
+          .hud-item h3 { font-size: 1rem; }
+          .item-card h2 { font-size: 1rem; }
+          .item-card p { font-size: 1.2rem; }
+        }
+      `}</style>
     </div>
   );
 }

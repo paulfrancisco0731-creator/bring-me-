@@ -1,39 +1,45 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { Camera as CameraIcon } from 'lucide-react';
+import { Camera as CameraIcon, RefreshCw } from 'lucide-react';
 
 const Camera = ({ onCapture, disabled }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [stream, setStream] = useState(null);
   const [error, setError] = useState(null);
+  const [facingMode, setFacingMode] = useState('environment'); // Default to back camera
+
+  const startCamera = async (mode) => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: mode } 
+      });
+      setStream(mediaStream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+      setError(null);
+    } catch (err) {
+      console.error("Camera error:", err);
+      setError("Unable to access camera. Please allow camera permissions.");
+    }
+  };
 
   useEffect(() => {
-    let activeStream = null;
-    
-    const startCamera = async () => {
-      try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: 'environment' } // Prefer back camera if available
-        });
-        activeStream = mediaStream;
-        setStream(mediaStream);
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
-        }
-      } catch (err) {
-        console.error("Camera error:", err);
-        setError("Unable to access camera. Please allow camera permissions.");
-      }
-    };
-
-    startCamera();
+    startCamera(facingMode);
 
     return () => {
-      if (activeStream) {
-        activeStream.getTracks().forEach(track => track.stop());
+      // Clean up stream on unmount or facingMode change
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, []);
+  }, [facingMode]);
+
+  const toggleCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
+  };
 
   const handleCapture = () => {
     if (disabled || !videoRef.current || !canvasRef.current) return;
@@ -83,6 +89,31 @@ const Camera = ({ onCapture, disabled }) => {
             style={{ width: '100%', display: 'block' }} 
           />
           <canvas ref={canvasRef} style={{ display: 'none' }} />
+          
+          {/* Switch Camera Button */}
+          <button 
+            onClick={toggleCamera}
+            disabled={disabled}
+            style={{
+              position: 'absolute',
+              top: '20px',
+              right: '20px',
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              border: '2px solid white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'white'
+            }}
+            title="Switch Camera"
+          >
+            <RefreshCw size={20} />
+          </button>
+
           <button 
             onClick={handleCapture}
             disabled={disabled}

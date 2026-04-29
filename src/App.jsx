@@ -5,9 +5,12 @@ import Game from './screens/Game';
 import End from './screens/End';
 import './index.css';
 
+import BackgroundMusic from './components/BackgroundMusic';
+
 function App() {
   return (
     <Router>
+      <BackgroundMusic />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/lobby/:roomCode" element={<Lobby />} />

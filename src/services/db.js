@@ -73,10 +73,16 @@ export const updateRoomConfig = async (roomCode, config) => {
 };
 
 export const startGame = async (roomCode, items) => {
+  const snapshot = await get(ref(database, `rooms/${roomCode}`));
+  const roomData = snapshot.val();
+  const timerDuration = roomData.timerDuration || 60;
+
   await update(ref(database, `rooms/${roomCode}`), {
     status: 'playing',
     items: items,
-    startedAt: Date.now()
+    startedAt: Date.now(),
+    roomCurrentItemIndex: 0,
+    roundEndsAt: Date.now() + (timerDuration * 1000)
   });
   
   // reset player states
@@ -136,12 +142,31 @@ export const endGame = async (roomCode, winnerName, recap) => {
   });
 };
 
+export const advanceToNextRound = async (roomCode, nextIndex, timerDuration) => {
+  const roomRef = ref(database, `rooms/${roomCode}`);
+  const snap = await get(roomRef);
+  const players = snap.val().players;
+
+  const updates = {};
+  updates[`rooms/${roomCode}/roomCurrentItemIndex`] = nextIndex;
+  updates[`rooms/${roomCode}/roundEndsAt`] = Date.now() + (timerDuration * 1000);
+  
+  for (const p in players) {
+    updates[`rooms/${roomCode}/players/${p}/status`] = 'taking_photo';
+    updates[`rooms/${roomCode}/players/${p}/lastSubmittedPhoto`] = null;
+  }
+  
+  await update(ref(database), updates);
+};
+
 export const resetGame = async (roomCode) => {
   await update(ref(database, `rooms/${roomCode}`), {
     status: 'lobby',
     items: [],
     winner: null,
-    recap: null
+    recap: null,
+    roomCurrentItemIndex: 0,
+    roundEndsAt: null
   });
 };
 
