@@ -62,6 +62,7 @@ Respond strictly in JSON format:
   try {
     const chatCompletion = await groq.chat.completions.create({
       messages: [
+        { role: "system", content: "You are a judge that outputs only JSON." },
         {
           role: "user",
           content: [
@@ -75,13 +76,15 @@ Respond strictly in JSON format:
           ],
         },
       ],
-      model: "llama-3.2-11b-vision-preview",
+      model: "llama-3.2-90b-vision-preview",
       response_format: { type: "json_object" },
     });
-    return JSON.parse(chatCompletion.choices[0].message.content);
+    const content = chatCompletion.choices[0].message.content;
+    console.log("Groq Vision Response:", content);
+    return JSON.parse(content);
   } catch (error) {
-    console.error("Error verifying photo with Groq Vision:", error);
-    return { points: 0, reason: "Error verifying photo. Please try again." };
+    console.error("Detailed Groq Vision Error:", error);
+    return { points: 0, reason: "AI judge was unavailable. Moving to next item." };
   }
 };
 
