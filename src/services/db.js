@@ -86,8 +86,8 @@ export const startGame = async (roomCode, items) => {
   });
   
   // reset player states
-  const snapshot = await get(ref(database, `rooms/${roomCode}/players`));
-  const players = snapshot.val();
+  const playersSnapshot = await get(ref(database, `rooms/${roomCode}/players`));
+  const players = playersSnapshot.val();
   const updates = {};
   for (const p in players) {
     updates[`rooms/${roomCode}/players/${p}/status`] = 'taking_photo';
