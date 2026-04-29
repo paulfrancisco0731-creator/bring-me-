@@ -11,7 +11,8 @@ function Home() {
   const navigate = useNavigate();
 
   const handleCreateRoom = async () => {
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       setError('Please enter your name first!');
       return;
     }
@@ -20,9 +21,11 @@ function Home() {
       setError('');
       // Default avatar configuration
       const defaultAvatar = { face: 'round', hair: 'black', color: '#EF476F' };
-      const code = await createRoom(name, defaultAvatar);
-      // Pass player name to lobby state
-      navigate(`/lobby/${code}`, { state: { playerName: name, isHost: true } });
+      const code = await createRoom(trimmedName, defaultAvatar);
+      // Persist state
+      localStorage.setItem('playerName', trimmedName);
+      localStorage.setItem('isHost', 'true');
+      navigate(`/lobby/${code}`, { state: { playerName: trimmedName, isHost: true } });
     } catch (err) {
       setError(err.message);
       setLoading(false);
@@ -30,7 +33,8 @@ function Home() {
   };
 
   const handleJoinRoom = () => {
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       setError('Please enter your name first!');
       return;
     }
@@ -38,8 +42,10 @@ function Home() {
       setError('Please enter a room code!');
       return;
     }
-    // Navigate to lobby, the lobby will handle the actual joining logic
-    navigate(`/lobby/${roomCode.toUpperCase()}`, { state: { playerName: name, isHost: false } });
+    // Persist state
+    localStorage.setItem('playerName', trimmedName);
+    localStorage.setItem('isHost', 'false');
+    navigate(`/lobby/${roomCode.toUpperCase()}`, { state: { playerName: trimmedName, isHost: false } });
   };
 
   return (

@@ -11,7 +11,8 @@ function Game() {
   const location = useLocation();
   const navigate = useNavigate();
   
-  const { playerName, isHost } = location.state || {};
+  const playerName = location.state?.playerName || localStorage.getItem('playerName');
+  const isHost = location.state?.isHost ?? (localStorage.getItem('isHost') === 'true');
   const [room, setRoom] = useState(null);
   const [verifying, setVerifying] = useState(false);
   const [verificationFeedback, setVerificationFeedback] = useState(null);
@@ -75,7 +76,9 @@ function Game() {
     await endGame(roomCode, winnerByPoints.name, recap);
   };
 
-  if (!room || !room.players) return <div className="app-container">Loading game state...</div>;
+  if (!room || !room.players || !room.players[playerName]) {
+    return <div className="app-container"><h2>Loading game state...</h2></div>;
+  }
 
   const me = room.players[playerName];
   const items = room.items || [];
@@ -119,6 +122,8 @@ function Game() {
     } else if (p.status === 'failed') {
       borderColor = 'var(--secondary)';
     }
+
+    const avatarData = p.avatar || { face: 'round', hair: 'short', color: '#ccc' };
 
     return (
       <div style={{
@@ -221,24 +226,27 @@ function Game() {
 
           {/* Right: Leaderboard */}
           <div className="glass-panel leaderboard-section" style={{ flex: '1 1 300px', maxWidth: '500px', display: 'flex', flexWrap: 'wrap', gap: '1.5rem', justifyContent: 'center', alignContent: 'flex-start', paddingTop: '4rem' }}>
-            {Object.values(room.players).map(p => (
-              <div key={p.name} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                {renderBubble(p)}
-                <Avatar face={p.avatar.face} hair={p.avatar.hair} color={p.avatar.color} size={60} />
-                <span style={{ 
-                  marginTop: '0.5rem', 
-                  fontWeight: 'bold', 
-                  fontSize: '0.9rem',
-                  background: p.name === playerName ? 'var(--primary)' : 'rgba(255,255,255,0.5)', 
-                  color: 'var(--dark)', 
-                  padding: '2px 10px', 
-                  borderRadius: '12px',
-                  boxShadow: 'var(--shadow-sm)'
-                }}>
-                  {p.name}: {p.score}
-                </span>
-              </div>
-            ))}
+            {Object.values(room.players).map(p => {
+              const avatarData = p.avatar || { face: 'round', hair: 'short', color: '#ccc' };
+              return (
+                <div key={p.name} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  {renderBubble(p)}
+                  <Avatar face={avatarData.face} hair={avatarData.hair} color={avatarData.color} size={60} />
+                  <span style={{ 
+                    marginTop: '0.5rem', 
+                    fontWeight: 'bold', 
+                    fontSize: '0.9rem',
+                    background: p.name === playerName ? 'var(--primary)' : 'rgba(255,255,255,0.5)', 
+                    color: 'var(--dark)', 
+                    padding: '2px 10px', 
+                    borderRadius: '12px',
+                    boxShadow: 'var(--shadow-sm)'
+                  }}>
+                    {p.name}: {p.score || 0}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

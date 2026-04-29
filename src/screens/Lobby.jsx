@@ -10,7 +10,8 @@ function Lobby() {
   const location = useLocation();
   const navigate = useNavigate();
   
-  const { playerName, isHost } = location.state || {};
+  const playerName = location.state?.playerName || localStorage.getItem('playerName');
+  const isHost = location.state?.isHost ?? (localStorage.getItem('isHost') === 'true');
   const [room, setRoom] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
