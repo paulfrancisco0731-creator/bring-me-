@@ -13,6 +13,7 @@
     "@google/genai": "^1.50.1",
     "firebase": "^12.12.1",
     "framer-motion": "^12.38.0",
+    "groq-sdk": "^1.1.2",
     "lucide-react": "^1.11.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

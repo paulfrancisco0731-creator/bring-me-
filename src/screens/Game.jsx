@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { subscribeToRoom, submitPhoto, updateVerificationResult, setPlayerStatus, endGame } from '../services/db';
-import { verifyPhoto, generateRecap } from '../services/gemini';
+import { verifyPhoto, generateRecap } from '../services/ai';
 import Avatar from '../components/Avatar';
 import Camera from '../components/Camera';
 import { motion, AnimatePresence } from 'framer-motion';

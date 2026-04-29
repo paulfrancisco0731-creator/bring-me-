@@ -1,9 +1,7 @@
-import { GoogleGenAI } from "@google/genai";
+import Groq from "groq-sdk";
 
-const API_KEY = "AIzaSyDA2JD3L3EIVOeAyeGEqPKQl19y5uuB12A";
-// For client side usage, we can just use fetch or the SDK. We will use fetch to be safe against browser-environment restrictions in some SDK versions, or try SDK first.
-// Actually, let's use the SDK.
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+const API_KEY = "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";
+const groq = new Groq({ apiKey: API_KEY, dangerouslyAllowBrowser: true });
 
 export const generateItems = async (theme, playerCount) => {
   const prompt = `You are the game master for a Filipino "Bring Me" game called "Saan Mo Sya Dalhin".
@@ -25,19 +23,17 @@ Respond strictly in JSON format matching this schema:
     }
   ]
 }
-Return only the JSON string, no markdown blocks.`;
+Return only the JSON string.`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      }
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "llama3-70b-8192",
+      response_format: { type: "json_object" },
     });
-    return JSON.parse(response.text);
+    return JSON.parse(chatCompletion.choices[0].message.content);
   } catch (error) {
-    console.error("Error generating items:", error);
+    console.error("Error generating items with Groq:", error);
     return null;
   }
 };
@@ -58,25 +54,28 @@ Respond strictly in JSON format:
 }`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        prompt,
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [
         {
-          inlineData: {
-            data: base64Image.split(',')[1] || base64Image,
-            mimeType: "image/jpeg"
-          }
-        }
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            {
+              type: "image_url",
+              image_url: {
+                url: base64Image.startsWith('data:') ? base64Image : `data:image/jpeg;base64,${base64Image}`,
+              },
+            },
+          ],
+        },
       ],
-      config: {
-        responseMimeType: "application/json",
-      }
+      model: "llama-3.2-11b-vision-preview",
+      response_format: { type: "json_object" },
     });
-    return JSON.parse(response.text);
+    return JSON.parse(chatCompletion.choices[0].message.content);
   } catch (error) {
-    console.error("Error verifying photo:", error);
-    return { pass: false, reason: "Error verifying photo. Please try again." };
+    console.error("Error verifying photo with Groq Vision:", error);
+    return { points: 0, reason: "Error verifying photo. Please try again." };
   }
 };
 
@@ -94,13 +93,13 @@ If it's a Solo game, focus on the player's personal performance and points achie
 Keep it under 150 words.`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-pro",
-      contents: prompt,
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "llama3-70b-8192",
     });
-    return response.text;
+    return chatCompletion.choices[0].message.content;
   } catch (error) {
-    console.error("Error generating recap:", error);
+    console.error("Error generating recap with Groq:", error);
     return "Wow, what a game! Everyone did great, but the AI commentator is currently speechless. 😂";
   }
 };

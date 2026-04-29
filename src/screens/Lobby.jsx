@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { joinRoom, subscribeToRoom, updateRoomConfig, startGame } from '../services/db';
-import { generateItems } from '../services/gemini';
+import { generateItems } from '../services/ai';
 import Avatar from '../components/Avatar';
 import { motion } from 'framer-motion';
 
