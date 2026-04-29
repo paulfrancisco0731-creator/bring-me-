@@ -158,6 +158,13 @@ export const advanceToNextRound = async (roomCode, nextIndex, timerDuration) => 
   await update(ref(database), updates);
 };
 
+// Cuts the current round timer to 10s — called when everyone has submitted
+export const collapseTimer = async (roomCode) => {
+  await update(ref(database, `rooms/${roomCode}`), {
+    roundEndsAt: Date.now() + 10000
+  });
+};
+
 export const resetGame = async (roomCode) => {
   await update(ref(database, `rooms/${roomCode}`), {
     status: 'lobby',

@@ -25,42 +25,41 @@ export const generateItems = async (theme, playerCount) => {
   const isFilipino = theme.toLowerCase().includes('filipino');
 
   const prompt = isFilipino
-    ? `Ikaw ang game master ng "Saan Mo Sya Dalhin" - isang Filipino party game.
+    ? `Ikaw ang game master ng "Saan Mo Sya Dalhin".
+Seed: ${seed}
 
-Seed (para random): ${seed}
+Pumili ng EXACTLY 6 na items mula sa listahang ito ng karaniwang gamit sa bahay ng Pilipino:
+tabo, payong, unan, medyas, sinturon, wallet, baso, plato, kutsara, tinidor, plantsa, halong kahoy, bote ng toyo, basahan, tela/kumot, sipit, balde, kandila, kutsilyo, step stool/maliliit na upuan, pitsel, thermos, kahit anong gamit sa kusina, panligo/shampoo, toothbrush, sapatos/tsinelas, relo, sombrero, bag/bag-bag, belt, suklay, salamin, libro, ballpen, cellphone case, kulambo, extension cord, rubber band.
 
-Gumawa ng EXACTLY 6 na iba't ibang items. Bawat item ay isang bagay na makikita sa karaniwang bahay ng Pilipino (hal: balde, posporo, kutsilyo, payong, sipit, basahan, kandila, medyas, sinturon, higaan, unan, timba, plorera, kaldero, etc.).
+Para sa bawat item, gumawa ng NAKAKATAWA at MADALING gawin na aksiyon gamit ang item (hal: "Tabo na nakasuot sa ulo bilang helmet", "Medyas na nakahawak sa ilong mo", "Unan na niyayakap mo tulad ng boyfriend/girlfriend", "Balde na nakalagay sa ulo mo tulad ng sombrero").
 
 RULES:
-1. HUWAG gamitin ang: walis tingting, toothbrush, sandok, remote, hanger. Pumili ng IBANG bagay.
-2. Bawat item ay may kasamang nakakatawang aksiyon o paraan ng pagdadala (hal: "Unan na nakasuot sa ulo bilang sombrero", "Medyas na nakasabit sa tainga").
-3. Taglish ang language. Maging creative at nakakatawa!
-4. Gawing unpredictable at random ang listahan.
+- Gamitin ang IBA'T IBANG items, huwag paulit-ulit
+- Ang aksiyon ay dapat madaling gawin sa loob ng bahay
+- Maging masaya at creative!
+- Taglish ang pagsulat
 
-Sagot sa JSON format:
+JSON format:
 {
   "items": [
-    { "id": 1, "description": "Object + Silly action" }
+    { "id": 1, "description": "Item na [nakakatawang aksiyon]" }
   ]
 }`
     : `You are the game master for "Bring Me!". Seed: ${seed}.
-
-Generate EXACTLY 6 random household items with silly actions. Be creative and unpredictable!
-
-Respond in JSON: { "items": [{ "id": 1, "description": "Item + Action" }] }`;
+Generate EXACTLY 6 random everyday household items with funny actions.
+JSON: { "items": [{ "id": 1, "description": "Item + funny action" }] }`;
 
   try {
     const data = await groqFetch({
       messages: [
-        { role: 'system', content: 'You are a creative party game host. Output only valid JSON.' },
+        { role: 'system', content: 'You are a fun Filipino party game host. Output only valid JSON.' },
         { role: 'user', content: prompt }
       ],
       model: 'llama-3.3-70b-versatile',
       response_format: { type: 'json_object' },
-      temperature: 1.2 // max creativity
+      temperature: 1.1
     });
     const parsed = JSON.parse(data.choices[0].message.content);
-    // Shuffle for extra randomness
     if (parsed.items) {
       parsed.items = parsed.items.sort(() => Math.random() - 0.5);
     }

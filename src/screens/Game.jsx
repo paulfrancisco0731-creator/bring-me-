@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { subscribeToRoom, submitPhoto, updateVerificationResult, advanceToNextRound, endGame } from '../services/db';
+import { subscribeToRoom, submitPhoto, updateVerificationResult, advanceToNextRound, endGame, collapseTimer } from '../services/db';
 import { verifyPhoto, generateRecap } from '../services/ai';
 import Avatar from '../components/Avatar';
 import Camera from '../components/Camera';
@@ -75,11 +75,24 @@ function Game() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.roundEndsAt, isHost, roomCode]);
 
-  // Reset submission state when round advances
+  // Reset local submission state when round changes
   useEffect(() => {
     setSubmitted(false);
     setVerificationFeedback(null);
   }, [room?.roomCurrentItemIndex]);
+
+  // HOST: Collapse timer to 10s when ALL players have submitted
+  useEffect(() => {
+    if (!isHost || !room?.players || !room?.roundEndsAt) return;
+    const players = Object.values(room.players);
+    if (players.length === 0) return;
+    const allSubmitted = players.every(p => p.status === 'submitted' || p.status === 'verified' || p.status === 'failed');
+    // Only collapse if more than 10s remaining (avoid re-triggering)
+    const remaining = room.roundEndsAt - Date.now();
+    if (allSubmitted && remaining > 10000) {
+      collapseTimer(roomCode);
+    }
+  }, [room?.players, isHost, roomCode, room?.roundEndsAt]);
 
   const handleGameEnd = async () => {
     if (!isHost || !room) return;
