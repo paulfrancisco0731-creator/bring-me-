@@ -46,6 +46,10 @@ function Lobby() {
       if (data) {
         setRoom(data);
         if (data.status === 'playing') {
+          // Always persist before navigating so Game.jsx can recover state
+          localStorage.setItem('playerName', playerName);
+          localStorage.setItem('isHost', String(isHost));
+          localStorage.setItem('roomCode', roomCode);
           navigate(`/game/${roomCode}`, { state: { playerName, isHost } });
         }
       }

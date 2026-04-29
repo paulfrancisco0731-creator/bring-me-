@@ -19,9 +19,11 @@ function Game() {
   const [timeLeft, setTimeLeft] = useState(0);
 
   useEffect(() => {
+    // If no playerName, show loading - don't redirect, room data may just be loading
     if (!playerName) {
-      navigate('/');
-      return;
+      // Wait 2s before giving up and redirecting
+      const timer = setTimeout(() => navigate('/'), 2000);
+      return () => clearTimeout(timer);
     }
 
     const unsubscribe = subscribeToRoom(roomCode, (data) => {
@@ -76,14 +78,34 @@ function Game() {
     await endGame(roomCode, winnerByPoints.name, recap);
   };
 
-  // Ensure items is always an array (Firebase sometimes stores arrays as objects)
-  const items = Array.isArray(room?.items) ? room.items : (room?.items ? Object.values(room.items) : []);
-
-  if (!room || !room.players || !room.players[playerName] || items.length === 0) {
-    return <div className="app-container"><h2>Loading game state...</h2><p>Wait a sec, items are syncing!</p></div>;
+  if (!room || !room.players) {
+    return (
+      <div className="app-container">
+        <div className="glass-panel" style={{ textAlign: 'center' }}>
+          <h2 className="floating">⏳ Loading Game...</h2>
+          <p style={{ color: '#666', marginTop: '1rem' }}>Connecting to room {roomCode}</p>
+        </div>
+      </div>
+    );
   }
 
-  const me = room.players[playerName];
+  // Ensure items is always an array (Firebase sometimes returns object)
+  const items = Array.isArray(room.items) ? room.items : (room.items ? Object.values(room.items) : []);
+
+  if (items.length === 0) {
+    return (
+      <div className="app-container">
+        <div className="glass-panel" style={{ textAlign: 'center' }}>
+          <h2 className="floating">🎮 Starting Game...</h2>
+          <p style={{ color: '#666', marginTop: '1rem' }}>Syncing items from server...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Resolve player - if playerName not in room, try to find by localStorage
+  const resolvedPlayerName = (room.players[playerName]) ? playerName : Object.keys(room.players)[0];
+  const me = room.players[resolvedPlayerName];
   const currentItemIndex = room.roomCurrentItemIndex || 0;
   const currentItem = items[currentItemIndex];
 
