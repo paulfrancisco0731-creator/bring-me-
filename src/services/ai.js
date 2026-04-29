@@ -12,28 +12,17 @@ const groqFetch = async (payload) => {
   });
   
   if (!response.ok) {
-    const errData = await response.json();
-    throw new Error(errData.error?.message || "Groq API error");
+    const errText = await response.text();
+    console.error(`Groq API Error (${response.status}):`, errText);
+    throw new Error(`Groq API error: ${response.status}`);
   }
   
   return response.json();
 };
 
 export const generateItems = async (theme, playerCount) => {
-  const prompt = `You are the game master for a Filipino "Bring Me" game called "Saan Mo Sya Dalhin".
-Theme: ${theme === "Filipino Humor" ? "Filipino Humor (use Taglish, funny everyday items, lutong bahay, etc)" : "Random (General fun items in English)"}.
-Players: ${playerCount}.
-
-Generate a list of exactly 6 items.
-Respond strictly in JSON format:
-{
-  "items": [
-    {
-      "id": 1,
-      "description": "Item description with staging instruction"
-    }
-  ]
-}`;
+  const prompt = `Generate a list of 6 "Bring Me" items for ${playerCount} players. Theme: ${theme}. 
+Respond ONLY with a JSON object: {"items": [{"id": 1, "description": "..."}]}`;
 
   try {
     const data = await groqFetch({
@@ -52,19 +41,13 @@ Respond strictly in JSON format:
 };
 
 export const verifyPhoto = async (itemDescription, base64Image) => {
-  const prompt = `You are the judge for a "Bring Me" game. 
-Item: "${itemDescription}".
-Evaluate the photo and award points 0-100.
-Respond strictly in JSON:
-{
-  "points": number,
-  "reason": "Short explanation"
-}`;
+  const prompt = `Judge this photo for the item: "${itemDescription}". 
+Award 0-100 points. 
+Return ONLY a JSON object like this: {"points": 85, "reason": "Good effort!"}`;
 
   try {
     const data = await groqFetch({
       messages: [
-        { role: "system", content: "You are a judge that outputs only JSON." },
         {
           role: "user",
           content: [
@@ -78,13 +61,20 @@ Respond strictly in JSON:
           ]
         }
       ],
-      model: "llama-3.2-11b-vision-preview",
-      response_format: { type: "json_object" }
+      model: "llama-3.2-11b-vision-preview"
+      // Removed response_format to ensure compatibility
     });
-    return JSON.parse(data.choices[0].message.content);
+    
+    const content = data.choices[0].message.content;
+    // Try to extract JSON if there's markdown or extra text
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    return JSON.parse(content);
   } catch (error) {
     console.error("Groq Vision Error:", error);
-    return { points: 0, reason: "AI judge was busy. Next item!" };
+    return { points: 50, reason: "AI judge is shy today! 50 points awarded." };
   }
 };
 
