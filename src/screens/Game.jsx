@@ -76,12 +76,14 @@ function Game() {
     await endGame(roomCode, winnerByPoints.name, recap);
   };
 
-  if (!room || !room.players || !room.players[playerName] || !room.items || room.items.length === 0) {
+  // Ensure items is always an array (Firebase sometimes stores arrays as objects)
+  const items = Array.isArray(room?.items) ? room.items : (room?.items ? Object.values(room.items) : []);
+
+  if (!room || !room.players || !room.players[playerName] || items.length === 0) {
     return <div className="app-container"><h2>Loading game state...</h2><p>Wait a sec, items are syncing!</p></div>;
   }
 
   const me = room.players[playerName];
-  const items = room.items || [];
   const currentItemIndex = room.roomCurrentItemIndex || 0;
   const currentItem = items[currentItemIndex];
 
