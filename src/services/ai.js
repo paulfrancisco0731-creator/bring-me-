@@ -21,38 +21,52 @@ const groqFetch = async (payload) => {
 };
 
 export const generateItems = async (theme, playerCount) => {
-  const prompt = `You are the game master for "Saan Mo Sya Dalhin". 
-Theme: ${theme}.
-Players: ${playerCount}.
+  const seed = Math.random().toString(36).substring(2, 8);
+  const isFilipino = theme.toLowerCase().includes('filipino');
 
-Generate exactly 6 items. 
-Rules:
-1. Items must be common objects found in an average Filipino household (e.g., walis tingting, remote, tsinelas, sandok, toothbrush, hanger).
-2. Every item MUST include a silly action (e.g., "Toothbrush placed on your forehead", "Remote as a phone", "Hanger as a crown").
-3. Make them funny and relatable (Taglish if Filipino Humor).
+  const prompt = isFilipino
+    ? `Ikaw ang game master ng "Saan Mo Sya Dalhin" - isang Filipino party game.
 
-Respond strictly in JSON format:
+Seed (para random): ${seed}
+
+Gumawa ng EXACTLY 6 na iba't ibang items. Bawat item ay isang bagay na makikita sa karaniwang bahay ng Pilipino (hal: balde, posporo, kutsilyo, payong, sipit, basahan, kandila, medyas, sinturon, higaan, unan, timba, plorera, kaldero, etc.).
+
+RULES:
+1. HUWAG gamitin ang: walis tingting, toothbrush, sandok, remote, hanger. Pumili ng IBANG bagay.
+2. Bawat item ay may kasamang nakakatawang aksiyon o paraan ng pagdadala (hal: "Unan na nakasuot sa ulo bilang sombrero", "Medyas na nakasabit sa tainga").
+3. Taglish ang language. Maging creative at nakakatawa!
+4. Gawing unpredictable at random ang listahan.
+
+Sagot sa JSON format:
 {
   "items": [
-    {
-      "id": 1,
-      "description": "Object + Silly Action"
-    }
+    { "id": 1, "description": "Object + Silly action" }
   ]
-}`;
+}`
+    : `You are the game master for "Bring Me!". Seed: ${seed}.
+
+Generate EXACTLY 6 random household items with silly actions. Be creative and unpredictable!
+
+Respond in JSON: { "items": [{ "id": 1, "description": "Item + Action" }] }`;
 
   try {
     const data = await groqFetch({
       messages: [
-        { role: "system", content: "You are a helpful assistant that outputs only JSON." },
-        { role: "user", content: prompt }
+        { role: 'system', content: 'You are a creative party game host. Output only valid JSON.' },
+        { role: 'user', content: prompt }
       ],
-      model: "llama-3.3-70b-versatile",
-      response_format: { type: "json_object" }
+      model: 'llama-3.3-70b-versatile',
+      response_format: { type: 'json_object' },
+      temperature: 1.2 // max creativity
     });
-    return JSON.parse(data.choices[0].message.content);
+    const parsed = JSON.parse(data.choices[0].message.content);
+    // Shuffle for extra randomness
+    if (parsed.items) {
+      parsed.items = parsed.items.sort(() => Math.random() - 0.5);
+    }
+    return parsed;
   } catch (error) {
-    console.error("Groq Text Error:", error);
+    console.error('Groq Text Error:', error);
     return null;
   }
 };
