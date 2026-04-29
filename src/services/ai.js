@@ -27,13 +27,19 @@ Return only the JSON string.`;
 
   try {
     const chatCompletion = await groq.chat.completions.create({
-      messages: [{ role: "user", content: prompt }],
-      model: "llama3-70b-8192",
+      messages: [
+        { role: "system", content: "You are a helpful assistant that outputs only JSON." },
+        { role: "user", content: prompt }
+      ],
+      model: "llama-3.3-70b-versatile",
       response_format: { type: "json_object" },
     });
-    return JSON.parse(chatCompletion.choices[0].message.content);
+    const content = chatCompletion.choices[0].message.content;
+    console.log("Groq Response:", content);
+    return JSON.parse(content);
   } catch (error) {
-    console.error("Error generating items with Groq:", error);
+    console.error("Detailed Groq Error:", error);
+    // Fallback or re-throw
     return null;
   }
 };
