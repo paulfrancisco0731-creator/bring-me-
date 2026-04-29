@@ -76,19 +76,17 @@ export const startGame = async (roomCode, items) => {
   const snapshot = await get(ref(database, `rooms/${roomCode}`));
   const roomData = snapshot.val();
   const timerDuration = roomData.timerDuration || 60;
+  const players = roomData.players || {};
 
-  await update(ref(database, `rooms/${roomCode}`), {
-    status: 'playing',
-    items: items,
-    startedAt: Date.now(),
-    roomCurrentItemIndex: 0,
-    roundEndsAt: Date.now() + (timerDuration * 1000)
-  });
-  
-  // reset player states
-  const playersSnapshot = await get(ref(database, `rooms/${roomCode}/players`));
-  const players = playersSnapshot.val();
   const updates = {};
+  // Room updates
+  updates[`rooms/${roomCode}/status`] = 'playing';
+  updates[`rooms/${roomCode}/items`] = items;
+  updates[`rooms/${roomCode}/startedAt`] = Date.now();
+  updates[`rooms/${roomCode}/roomCurrentItemIndex`] = 0;
+  updates[`rooms/${roomCode}/roundEndsAt`] = Date.now() + (timerDuration * 1000);
+  
+  // Reset all players
   for (const p in players) {
     updates[`rooms/${roomCode}/players/${p}/status`] = 'taking_photo';
     updates[`rooms/${roomCode}/players/${p}/currentItemIndex`] = 0;
@@ -98,6 +96,7 @@ export const startGame = async (roomCode, items) => {
     updates[`rooms/${roomCode}/players/${p}/failedAttempts`] = 0;
     updates[`rooms/${roomCode}/players/${p}/totalTime`] = 0;
   }
+  
   await update(ref(database), updates);
 };
 

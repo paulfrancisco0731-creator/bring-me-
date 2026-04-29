@@ -76,8 +76,8 @@ function Game() {
     await endGame(roomCode, winnerByPoints.name, recap);
   };
 
-  if (!room || !room.players || !room.players[playerName]) {
-    return <div className="app-container"><h2>Loading game state...</h2></div>;
+  if (!room || !room.players || !room.players[playerName] || !room.items || room.items.length === 0) {
+    return <div className="app-container"><h2>Loading game state...</h2><p>Wait a sec, items are syncing!</p></div>;
   }
 
   const me = room.players[playerName];
