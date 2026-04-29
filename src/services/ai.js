@@ -41,11 +41,14 @@ Respond ONLY with a JSON object: {"items": [{"id": 1, "description": "..."}]}`;
 };
 
 export const verifyPhoto = async (itemDescription, base64Image) => {
-  const prompt = `Judge this photo for the item: "${itemDescription}". Award 0-100 points. Return ONLY a JSON object: {"points": 85, "reason": "..."}`;
+  const prompt = `Judge this photo for the item: "${itemDescription}". 
+Award 0-100 points based on accuracy and effort. 
+Respond ONLY in JSON format: {"points": number, "reason": "short explanation"}`;
 
   try {
     const data = await groqFetch({
       messages: [
+        { role: "system", content: "You are a judge that outputs only JSON." },
         {
           role: "user",
           content: [
@@ -59,21 +62,16 @@ export const verifyPhoto = async (itemDescription, base64Image) => {
           ]
         }
       ],
-      model: "llama-3.2-11b-vision-preview"
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+      response_format: { type: "json_object" }
     });
     
-    const content = data.choices[0].message.content;
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    return JSON.parse(content);
+    return JSON.parse(data.choices[0].message.content);
   } catch (error) {
     console.error("Groq Vision Error:", error);
-    // Return the error message so the user can see it
     return { 
       points: 0, 
-      reason: `AI Judge Error: ${error.message}. Check your Groq key/limits.` 
+      reason: `Judge Error: ${error.message}.` 
     };
   }
 };
