@@ -1,141 +1,175 @@
-import { Camera as CameraIcon, RefreshCw } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { Camera as CameraIcon, RefreshCw, VideoOff } from 'lucide-react';
 
 const Camera = ({ onCapture, disabled }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
-  const [stream, setStream] = useState(null);
+  const streamRef = useRef(null); // Use ref for stream to avoid stale closure
   const [error, setError] = useState(null);
-  const [facingMode, setFacingMode] = useState('environment'); // Default to back camera
+  const [facingMode, setFacingMode] = useState('environment');
+  const [isLoading, setIsLoading] = useState(true);
+
+  const stopStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+  };
 
   const startCamera = async (mode) => {
+    stopStream();
+    setIsLoading(true);
+    setError(null);
+
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: mode } 
-      });
-      setStream(mediaStream);
+      // Try with facing mode first, fall back to any camera
+      let mediaStream;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: mode }
+        });
+      } catch {
+        // Fallback: try without facing mode constraint
+        mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
+      streamRef.current = mediaStream;
+
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
       }
       setError(null);
     } catch (err) {
-      console.error("Camera error:", err);
-      setError("Unable to access camera. Please allow camera permissions.");
+      console.warn('Camera access failed:', err.name, err.message);
+      setError('No camera found. Please allow camera access or check your device.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
     startCamera(facingMode);
-
-    return () => {
-      // Clean up stream on unmount or facingMode change
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
+    return () => stopStream();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode]);
 
   const toggleCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-    }
-    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
+    setFacingMode(prev => (prev === 'user' ? 'environment' : 'user'));
   };
 
   const handleCapture = () => {
-    if (disabled || !videoRef.current || !canvasRef.current) return;
-    
+    if (disabled || !videoRef.current || !canvasRef.current || !streamRef.current) return;
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    
-    // Cap resolution to avoid massive base64 strings (which cause 400 errors)
-    const MAX_WIDTH = 800;
-    const MAX_HEIGHT = 800;
-    let width = video.videoWidth;
-    let height = video.videoHeight;
+
+    const MAX_DIM = 800;
+    let width = video.videoWidth || 640;
+    let height = video.videoHeight || 480;
 
     if (width > height) {
-      if (width > MAX_WIDTH) {
-        height *= MAX_WIDTH / width;
-        width = MAX_WIDTH;
-      }
+      if (width > MAX_DIM) { height = Math.round(height * MAX_DIM / width); width = MAX_DIM; }
     } else {
-      if (height > MAX_HEIGHT) {
-        width *= MAX_HEIGHT / height;
-        height = MAX_HEIGHT;
-      }
+      if (height > MAX_DIM) { width = Math.round(width * MAX_DIM / height); height = MAX_DIM; }
     }
 
     canvas.width = width;
     canvas.height = height;
-    
+
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, width, height);
-    
-    // Convert to base64
+
     const base64Image = canvas.toDataURL('image/jpeg', 0.8);
     onCapture(base64Image);
   };
 
   return (
-    <div style={{ position: 'relative', width: '100%', borderRadius: '16px', overflow: 'hidden', backgroundColor: '#000' }}>
-      {error ? (
-        <div style={{ padding: '2rem', color: 'white', textAlign: 'center' }}>{error}</div>
-      ) : (
+    <div style={{
+      position: 'relative',
+      width: '100%',
+      borderRadius: '16px',
+      overflow: 'hidden',
+      backgroundColor: '#111',
+      minHeight: '240px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }}>
+      {isLoading && !error && (
+        <div style={{ color: '#aaa', textAlign: 'center', padding: '2rem' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📷</div>
+          <p>Starting camera...</p>
+        </div>
+      )}
+
+      {error && (
+        <div style={{ color: '#fff', textAlign: 'center', padding: '2rem' }}>
+          <VideoOff size={40} style={{ marginBottom: '1rem', opacity: 0.6 }} />
+          <p style={{ fontSize: '0.9rem', opacity: 0.8 }}>{error}</p>
+          <button
+            onClick={() => startCamera(facingMode)}
+            style={{
+              marginTop: '1rem',
+              padding: '0.5rem 1rem',
+              borderRadius: '8px',
+              background: 'var(--primary)',
+              color: 'var(--dark)',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!error && (
         <>
-          <video 
-            ref={videoRef} 
-            autoPlay 
-            playsInline 
-            style={{ width: '100%', display: 'block' }} 
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            onLoadedMetadata={() => setIsLoading(false)}
+            style={{ width: '100%', display: 'block', borderRadius: '16px' }}
           />
           <canvas ref={canvasRef} style={{ display: 'none' }} />
-          
-          {/* Switch Camera Button */}
-          <button 
+
+          {/* Switch Camera */}
+          <button
             onClick={toggleCamera}
             disabled={disabled}
             style={{
-              position: 'absolute',
-              top: '20px',
-              right: '20px',
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              backgroundColor: 'rgba(0,0,0,0.5)',
-              border: '2px solid white',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: 'white'
+              position: 'absolute', top: '12px', right: '12px',
+              width: '40px', height: '40px', borderRadius: '50%',
+              backgroundColor: 'rgba(0,0,0,0.55)', border: '2px solid rgba(255,255,255,0.7)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', color: 'white', zIndex: 10
             }}
             title="Switch Camera"
           >
-            <RefreshCw size={20} />
+            <RefreshCw size={18} />
           </button>
 
-          <button 
+          {/* Capture Button */}
+          <button
             onClick={handleCapture}
             disabled={disabled}
             style={{
-              position: 'absolute',
-              bottom: '20px',
-              left: '50%',
+              position: 'absolute', bottom: '16px', left: '50%',
               transform: 'translateX(-50%)',
-              width: '60px',
-              height: '60px',
-              borderRadius: '50%',
-              backgroundColor: disabled ? '#ccc' : 'var(--secondary)',
+              width: '64px', height: '64px', borderRadius: '50%',
+              backgroundColor: disabled ? '#888' : 'var(--secondary)',
               border: '4px solid white',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: disabled ? 'not-allowed' : 'pointer',
-              boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
-              color: 'white'
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              color: 'white', zIndex: 10,
+              transition: 'all 0.2s ease'
             }}
           >
-            <CameraIcon size={24} />
+            <CameraIcon size={26} />
           </button>
         </>
       )}
