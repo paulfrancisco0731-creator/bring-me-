@@ -1,7 +1,23 @@
-import Groq from "groq-sdk";
-
 const API_KEY = "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";
-const groq = new Groq({ apiKey: API_KEY, dangerouslyAllowBrowser: true });
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+
+const groqFetch = async (payload) => {
+  const response = await fetch(GROQ_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${API_KEY}`
+    },
+    body: JSON.stringify(payload)
+  });
+  
+  if (!response.ok) {
+    const errData = await response.json();
+    throw new Error(errData.error?.message || "Groq API error");
+  }
+  
+  return response.json();
+};
 
 export const generateItems = async (theme, playerCount) => {
   const prompt = `You are the game master for a Filipino "Bring Me" game called "Saan Mo Sya Dalhin".
@@ -9,12 +25,7 @@ Theme: ${theme === "Filipino Humor" ? "Filipino Humor (use Taglish, funny everyd
 Players: ${playerCount}.
 
 Generate a list of exactly 6 items.
-Rules:
-1. Every item MUST require live physical participation (cannot be googled or screenshotted).
-2. MUST include a staging instruction (e.g., "Selfie habang hawak ang walis tingting na parang mikropono" or "Take a photo balancing a spoon on your nose").
-3. Items must scale in difficulty (Item 1 is easiest, Item 6 is hardest).
-
-Respond strictly in JSON format matching this schema:
+Respond strictly in JSON format:
 {
   "items": [
     {
@@ -22,45 +33,36 @@ Respond strictly in JSON format matching this schema:
       "description": "Item description with staging instruction"
     }
   ]
-}
-Return only the JSON string.`;
+}`;
 
   try {
-    const chatCompletion = await groq.chat.completions.create({
+    const data = await groqFetch({
       messages: [
         { role: "system", content: "You are a helpful assistant that outputs only JSON." },
         { role: "user", content: prompt }
       ],
       model: "llama-3.3-70b-versatile",
-      response_format: { type: "json_object" },
+      response_format: { type: "json_object" }
     });
-    const content = chatCompletion.choices[0].message.content;
-    console.log("Groq Response:", content);
-    return JSON.parse(content);
+    return JSON.parse(data.choices[0].message.content);
   } catch (error) {
-    console.error("Detailed Groq Error:", error);
-    // Fallback or re-throw
+    console.error("Groq Text Error:", error);
     return null;
   }
 };
 
 export const verifyPhoto = async (itemDescription, base64Image) => {
   const prompt = `You are the judge for a "Bring Me" game. 
-The current item is: "${itemDescription}".
-
-Evaluate the provided photo and award points from 0 to 100 based on these criteria:
-1. Accuracy: Does the photo match the item description perfectly? (e.g. if it asks for a spoon on the nose, and it's just on the face, give partial points like 50).
-2. Authenticity: Does it appear to be a live, real-world photo (not a screenshot or downloaded image)? (Give 0 points if it's fake).
-3. Effort/Proof: Is the required participation proof/staging instruction clearly visible?
-
-Respond strictly in JSON format:
+Item: "${itemDescription}".
+Evaluate the photo and award points 0-100.
+Respond strictly in JSON:
 {
   "points": number,
-  "reason": "A short 1-sentence reason explaining the score. Be funny and use Taglish if the item is Filipino-themed."
+  "reason": "Short explanation"
 }`;
 
   try {
-    const chatCompletion = await groq.chat.completions.create({
+    const data = await groqFetch({
       messages: [
         { role: "system", content: "You are a judge that outputs only JSON." },
         {
@@ -70,45 +72,33 @@ Respond strictly in JSON format:
             {
               type: "image_url",
               image_url: {
-                url: base64Image.startsWith('data:') ? base64Image : `data:image/jpeg;base64,${base64Image}`,
-              },
-            },
-          ],
-        },
+                url: base64Image.startsWith('data:') ? base64Image : `data:image/jpeg;base64,${base64Image}`
+              }
+            }
+          ]
+        }
       ],
-      model: "llama-3.2-90b-vision-preview",
-      response_format: { type: "json_object" },
+      model: "llama-3.2-11b-vision-preview",
+      response_format: { type: "json_object" }
     });
-    const content = chatCompletion.choices[0].message.content;
-    console.log("Groq Vision Response:", content);
-    return JSON.parse(content);
+    return JSON.parse(data.choices[0].message.content);
   } catch (error) {
-    console.error("Detailed Groq Vision Error:", error);
-    return { points: 0, reason: "AI judge was unavailable. Moving to next item." };
+    console.error("Groq Vision Error:", error);
+    return { points: 0, reason: "AI judge was busy. Next item!" };
   }
 };
 
 export const generateRecap = async (gameData, theme) => {
-  const prompt = `You are a funny commentator for a "Bring Me" game.
-The game just ended. Here is the game data (players, their scores/points, and items completed):
-${JSON.stringify(gameData, null, 2)}
-
-Write a personalized, funny post-game recap in the style of the chosen theme: ${theme}.
-The game is points-based (highest score wins).
-If Filipino Humor: Use Taglish, with kulit commentary per player (e.g., roast them for low points or praise their perfect 100 scores).
-If Random: Witty English recap with playful roasting.
-If it's a Solo game, focus on the player's personal performance and points achieved.
-
-Keep it under 150 words.`;
+  const prompt = `Write a funny Taglish recap for this game data: ${JSON.stringify(gameData)}`;
 
   try {
-    const chatCompletion = await groq.chat.completions.create({
+    const data = await groqFetch({
       messages: [{ role: "user", content: prompt }],
-      model: "llama3-70b-8192",
+      model: "llama-3.3-70b-versatile"
     });
-    return chatCompletion.choices[0].message.content;
+    return data.choices[0].message.content;
   } catch (error) {
-    console.error("Error generating recap with Groq:", error);
-    return "Wow, what a game! Everyone did great, but the AI commentator is currently speechless. 😂";
+    console.error("Groq Recap Error:", error);
+    return "What a game! Everyone did great! 😂";
   }
 };
